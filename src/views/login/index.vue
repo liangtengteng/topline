@@ -26,6 +26,7 @@
 </template>
 
 <script>
+import './gt.js'
 export default {
   name: '',
   // 给from表单域制作校验规则
@@ -78,28 +79,65 @@ export default {
         if (!valid) {
           return false
         }
-        // 服务器账号真实校验
+        // A.人机交互验证
+        // axios获得极验的密钥信息
         let pro = this.$http({
-          url: 'mp/v1_0/authorizations',
-          method: 'post',
-          data: this.loginForm
+          url: '/mp/v1_0/captchas/' + this.loginForm.mobile,
+          method: 'get'
         })
         pro
           .then(result => {
-            // 客户端浏览器把服务端返回的密钥等相关信息通过sessionStorage做记录，表名是登录状态
-            window.sessionStorage.setItem('userinfo', JSON.stringify(result.data.data))
-            // console.log(result)
-            // 进入后台系统
-            // 路由编程式导航
-            // name属性实现编程式导航
-            this.$router.push({ name: 'home' })
+            // console.log(result)// 极验的密钥信息
+            // 从result里边解构下述的data对象出来(对象结构赋值)
+            let { data } = result.data
+            // 请检测data的数据结构，保证data.gt data.challenge data.success有值
+            window.initGeetest({
+              // 以下配置参数来自服务端SDK
+              gt: data.gt,
+              challenge: data.challenge,
+              offline: !data.success,
+              new_captcha: true,
+              product: 'bind'// 设置验证窗口样式
+            }, captchaObj => {
+              // 这里可以调用验证实例captchaObj的实例方法
+              captchaObj.onReady(() => {
+                captchaObj.verify()// 显示验证码窗口
+              }).onSuccess(() => {
+                // 行为校验正确的处理
+                // B 验证账号，登录系统
+                this.loginAct()
+              }).onError(() => {
+                // 行为校验错误的处理
+              })
+            })
           })
           .catch(err => {
-            // 通过弹出框把错误显示出来
-            // console.log('手机号码或验证码错误：' + err)
-            this.$message.error('手机号码或验证码错误：' + err)
+            return this.$message.error('获取极验密钥失败：' + err)
           })
       })
+    },
+    loginAct () {
+      // 服务器账号真实校验
+      let pro = this.$http({
+        url: 'mp/v1_0/authorizations',
+        method: 'post',
+        data: this.loginForm
+      })
+      pro
+        .then(result => {
+          // 客户端浏览器把服务端返回的密钥等相关信息通过sessionStorage做记录，表名是登录状态
+          window.sessionStorage.setItem('userinfo', JSON.stringify(result.data.data))
+          // console.log(result)
+          // 进入后台系统
+          // 路由编程式导航
+          // name属性实现编程式导航
+          this.$router.push({ name: 'home' })
+        })
+        .catch(err => {
+          // 通过弹出框把错误显示出来
+          // console.log('手机号码或验证码错误：' + err)
+          this.$message.error('手机号码或验证码错误：' + err)
+        })
     }
   }
 }
